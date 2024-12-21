@@ -1,0 +1,22 @@
+ Makefile для calc_service
+
+.PHONY: all build run test clean
+
+# По умолчанию: сборка проекта
+all: build
+
+# Сборка проекта
+build:
+	go build -o bin/calc_service ./cmd/calc_service/
+
+# Запуск проекта
+run:
+	go run ./cmd/calc_service/
+
+# Запуск тестов
+test:
+	go test ./... -v
+
+# Очистка сборки
+clean:
+	rm -rf bin/
