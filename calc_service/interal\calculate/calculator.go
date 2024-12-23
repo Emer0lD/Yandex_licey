@@ -1,133 +1,156 @@
 package calculate
 
 import (
-	"errors"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
-func Calculate(expression string) (float64, error) {
-	tokens := tokenize(expression)
-	if len(tokens) == 0 {
-		return 0, errors.New("empty expression")
-	}
-
-	outputQueue := []string{}
-	operatorStack := []string{}
-
-	for _, token := range tokens {
-		if isNumber(token) {
-			outputQueue = append(outputQueue, token)
-		} else if token == "(" {
-			operatorStack = append(operatorStack, token)
-		} else if token == ")" {
-			for len(operatorStack) > 0 && operatorStack[len(operatorStack)-1] != "(" {
-				outputQueue = append(outputQueue, operatorStack[len(operatorStack)-1])
-				operatorStack = operatorStack[:len(operatorStack)-1]
+func right_string(s string) bool {
+	stack := []rune{}
+	for _, c := range s {
+		switch c {
+		case ')':
+			if stack[len(stack)-1] != '(' || len(stack) == 0 {
+				return false
 			}
-			if len(operatorStack) == 0 {
-				return 0, errors.New("mismatched parentheses")
-			}
-			operatorStack = operatorStack[:len(operatorStack)-1]
-		} else if isOperator(token) {
-			for len(operatorStack) > 0 && precedence(operatorStack[len(operatorStack)-1]) >= precedence(token) {
-				outputQueue = append(outputQueue, operatorStack[len(operatorStack)-1])
-				operatorStack = operatorStack[:len(operatorStack)-1]
-			}
-			operatorStack = append(operatorStack, token)
+			stack = stack[:len(stack)-1]
+		case '(':
+			stack = append(stack, c)
 		}
 	}
+	return len(stack) == 0
+}
 
-	for len(operatorStack) > 0 {
-		outputQueue = append(outputQueue, operatorStack[len(operatorStack)-1])
-		operatorStack = operatorStack[:len(operatorStack)-1]
+func countOp(expression []string) bool {
+	op := 0
+	numbers := 0
+	for _, val := range expression {
+		if _, err := strconv.ParseFloat(val, 64); err == nil {
+			numbers++
+		} else if val == "+" || val == "-" || val == "*" || val == "/" {
+			op++
+		}
 	}
-
-	return evaluateRPN(outputQueue)
+	if numbers-op == 1 {
+		return true
+	} else {
+		return false
+	}
 }
 
 func tokenize(expression string) []string {
 	var tokens []string
-	var currentToken strings.Builder
-
-	for _, char := range expression {
-		switch char {
-		case ' ':
-			continue
-		case '+', '-', '*', '/', '(', ')':
-			if currentToken.Len() > 0 {
-				tokens = append(tokens, currentToken.String())
-				currentToken.Reset()
+	token := ""
+	for _, r := range expression {
+		if unicode.IsDigit(r) || r == '.' {
+			token += string(r)
+		} else {
+			if len(token) > 0 {
+				tokens = append(tokens, token)
+				token = ""
 			}
-			tokens = append(tokens, string(char))
-		default:
-			currentToken.WriteRune(char)
+			tokens = append(tokens, string(r))
 		}
 	}
-
-	if currentToken.Len() > 0 {
-		tokens = append(tokens, currentToken.String())
+	if len(token) > 0 {
+		tokens = append(tokens, token)
 	}
-
 	return tokens
 }
 
-func evaluateRPN(tokens []string) (float64, error) {
-	var stack []float64
-
-	for _, token := range tokens {
-		if isNumber(token) {
-			val, _ := strconv.ParseFloat(token, 64)
-			stack = append(stack, val)
-		} else if isOperator(token) {
-			if len(stack) < 2 {
-				return 0, errors.New("invalid expression")
-			}
-			b := stack[len(stack)-1]
-			a := stack[len(stack)-2]
-			stack = stack[:len(stack)-2]
-
-			var result float64
-			switch token {
-			case "+":
-				result = a + b
-			case "-":
-				result = a - b
-			case "*":
-				result = a * b
-			case "/":
-				if b == 0 {
-					return 0, errors.New("division by zero")
-				}
-				result = a / b
-			}
-
-			stack = append(stack, result)
+func IsLetter(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) {
+			return true
 		}
 	}
+	return false
+}
 
-	if len(stack) != 1 {
-		return 0, errors.New("invalid expression")
+func Calc(expression string) (float64, error) {
+	if !right_string(expression) {
+		return 0.0, ErrInvalidBracket
 	}
-
-	return stack[0], nil
-}
-
-func isNumber(token string) bool {
-	_, err := strconv.ParseFloat(token, 64)
-	return err == nil
-}
-
-func isOperator(token string) bool {
-	return token == "+" || token == "-" || token == "*" || token == "/"
-}
-
-func precedence(op string) int {
-	switch op {
-	case "+", "-":
-		return 1
-	case "*", "/":
-		return 2
+	if IsLetter(expression) {
+		return 0.0, ErrInvalidOperands
 	}
-	return 0
+	expression = strings.ReplaceAll(expression, " ", "")
+	tokens := tokenize(expression)
+	tokens = infixToPostfix(tokens)
+	if expression == "" || expression == " " {
+		return 0.0, ErrEmptyExpression
+	}
+	if !countOp(tokens) {
+		return 0.0, ErrInvalidOperands
+	}
+	var stack []float64
+	for _, val := range tokens {
+		switch val {
+		case "+":
+			v_1 := float64(stack[len(stack)-1])
+			v_2 := float64(stack[len(stack)-2])
+			stack = stack[:len(stack)-2]
+			stack = append(stack, float64(v_1+v_2))
+		case "-":
+			v_1 := float64(stack[len(stack)-1])
+			v_2 := float64(stack[len(stack)-2])
+			stack = stack[:len(stack)-2]
+			stack = append(stack, float64(v_1-v_2))
+		case "*":
+			v_1 := float64(stack[len(stack)-1])
+			v_2 := float64(stack[len(stack)-2])
+			stack = stack[:len(stack)-2]
+			stack = append(stack, float64(v_1*v_2))
+		case "/":
+			v_1 := float64(stack[len(stack)-2])
+			v_2 := float64(stack[len(stack)-1])
+			r_1 := float64(v_1)
+			r_2 := float64(v_2)
+			stack = stack[:len(stack)-2]
+			if v_2 == 0 {
+				return 0.0, ErrDivByZero
+			}
+			stack = append(stack, float64(r_2/r_1))
+		default:
+			val1, _ := strconv.ParseFloat(string(val), 64)
+			stack = append(stack, float64(val1))
+		}
+	}
+	return float64(stack[len(stack)-1]), nil
+}
+
+func infixToPostfix(expression []string) []string {
+	stack := make([]string, 0)
+	postfix := []string{}
+	for _, r := range expression {
+		switch r {
+		case "(":
+			stack = append(stack, r)
+		case ")":
+			for len(stack) > 0 && stack[len(stack)-1] != "(" {
+				postfix = append(postfix, stack[len(stack)-1])
+				stack = stack[:len(stack)-1]
+			}
+			if len(stack) > 0 {
+				stack = stack[:len(stack)-1] // Удаление '('
+			}
+
+		case "+", "-":
+			for len(stack) > 0 && (stack[len(stack)-1] == "*" || stack[len(stack)-1] == "/") {
+				postfix = append(postfix, stack[len(stack)-1])
+				stack = stack[:len(stack)-1]
+			}
+			stack = append(stack, r)
+		case "*", "/":
+			stack = append(stack, r)
+		default:
+			postfix = append(postfix, r)
+		}
+	}
+	for len(stack) > 0 {
+		postfix = append(postfix, stack[len(stack)-1])
+		stack = stack[:len(stack)-1]
+	}
+	return postfix
 }
